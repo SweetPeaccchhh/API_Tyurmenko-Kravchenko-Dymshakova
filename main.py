@@ -12,13 +12,13 @@ app = FastAPI(
 
 @app.get("/")
 def root():
-    """Проверка статуса сервера """
+    """Проверка статуса сервера"""
     return {"status": "ok", "service": "calculator-api", "version": "1.0.0"}
 
 
 @app.get("/add")
 def add(a: float = Query(...), b: float = Query(...)):
-    """Сложение: /add?a=2&b=3 (как будет отображаться)"""
+    """Сложение: /add?a=2&b=3"""
     return {"operation": "add", "a": a, "b": b, "result": a + b}
 
 
@@ -47,7 +47,7 @@ def health():
     """Проверки здоровья для Docker и Пайплайн"""
     return {"status": "healthy"}
 
-# ---------- Расширенные операции ----------
+# Расширенные операции
 
 def check(value: float) -> float:
     """Проверяет, что число не слишком большое."""
