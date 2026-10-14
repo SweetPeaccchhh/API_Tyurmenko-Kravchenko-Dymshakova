@@ -8,7 +8,7 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  workflow_dispatch:      # чтобы можно было запустить вручную из UI
+  workflow_dispatch: # чтобы можно было запустить вручную из UI
 
 # Переменные окружения, доступные всем блокам работы
 env:
@@ -50,11 +50,99 @@ jobs:
         run: |
           pytest tests/ -v
 
-  # JOB 2: Сборка и публикация Docker-образа
+  # JOB 2: Статический анализ кода (Bandit + Semgrep)
+  sast:
+    name: Security — SAST (Bandit + Semgrep)
+    runs-on: ubuntu-latest
+    needs: test       # запускается после успешных тестов
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Bandit
+        run: pip install bandit
+
+      # Bandit — анализ Python-кода на уязвимости
+      - name: Run Bandit
+        run: |
+          bandit -r main.py -f txt || true
+        continue-on-error: true
+
+      # Semgrep — многоязычный статический анализ
+      - name: Run Semgrep
+        uses: semgrep/semgrep-action@v1
+        with:
+          config: >-
+            p/security-audit
+            p/python
+            p/fastapi
+        continue-on-error: true
+
+  # JOB 3: Сканирование секретов (Gitleaks)
+  secrets-scan:
+    name: Security — Secrets (Gitleaks)
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # полная история - нужно для сканирования
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
+  # JOB 4: Сканирование зависимостей и образа (Trivy)
+  trivy-scan:
+    name: Security — Dependencies & Image (Trivy)
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Trivy — сканирование файловой системы (зависимости в requirements.txt)
+      - name: Run Trivy — filesystem scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          severity: 'LOW,MEDIUM,HIGH,CRITICAL'
+          exit-code: '0'
+        continue-on-error: true
+
+      # Собираем локальный образ, чтобы сканировать его
+      - name: Build local image for scan
+        run: docker build -t calculator-api:scan .
+
+      # Trivy - сканирование Docker-образа на CVE
+      - name: Run Trivy — image scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: 'image'
+          image-ref: 'calculator-api:scan'
+          format: 'table'
+          severity: 'LOW,MEDIUM,HIGH,CRITICAL'
+          exit-code: '0'
+        continue-on-error: true
+
+  # JOB 5: Сборка и публикация Docker-образа
   build-and-push:
     name: Build & Push Docker Image
     runs-on: ubuntu-latest
-    needs: test           # запускается, если тесты прошли
+    needs: [ test, sast, secrets-scan, trivy-scan ]   # после всех проверок
     if: github.event_name == 'push'    # только на push, не на пул-реквест
 
     # права для публикации в ghcr.io
