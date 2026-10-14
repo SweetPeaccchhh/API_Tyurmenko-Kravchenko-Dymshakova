@@ -114,7 +114,7 @@ jobs:
 
       # Trivy — сканирование файловой системы (зависимости в requirements.txt)
       - name: Run Trivy — filesystem scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
           scan-ref: '.'
@@ -129,7 +129,7 @@ jobs:
 
       # Trivy - сканирование Docker-образа на CVE
       - name: Run Trivy — image scan
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'image'
           image-ref: 'calculator-api:scan'
